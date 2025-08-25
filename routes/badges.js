@@ -1,13 +1,14 @@
 const express = require('express');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const mockDb = require('../data/mockDatabase');
+const db = require('../database');
 
 const router = express.Router();
 
 // Obtener todas las insignias disponibles
 router.get('/', (req, res) => {
   try {
-    const badges = mockDb.badges.filter(badge => badge.is_active);
+    const badges = db.badges.filter(badge => badge.is_active);
     
     res.json({
       success: true,
@@ -45,12 +46,12 @@ router.get('/user/:userId', authenticateToken, (req, res) => {
       });
     }
 
-    const userBadges = mockDb.userBadges.filter(ub => ub.user_id === userId);
+    const userBadges = db.userBadges.filter(ub => ub.user_id === userId);
     
     // Enriquecer con información de la insignia
     const enrichedBadges = userBadges.map(userBadge => {
-      const badge = mockDb.badges.find(b => b.id === userBadge.badge_id);
-      const course = userBadge.course_id ? mockDb.getCourseById(userBadge.course_id) : null;
+      const badge = db.badges.find(b => b.id === userBadge.badge_id);
+      const course = userBadge.course_id ? db.getCourseById(userBadge.course_id) : null;
       
       return {
         id: userBadge.id,
@@ -92,12 +93,12 @@ router.get('/user/:userId', authenticateToken, (req, res) => {
 // Obtener insignias del usuario autenticado
 router.get('/my-badges', authenticateToken, (req, res) => {
   try {
-    const userBadges = mockDb.userBadges.filter(ub => ub.user_id === req.user.id);
+    const userBadges = db.userBadges.filter(ub => ub.user_id === req.user.id);
     
     // Enriquecer con información de la insignia
     const enrichedBadges = userBadges.map(userBadge => {
-      const badge = mockDb.badges.find(b => b.id === userBadge.badge_id);
-      const course = userBadge.course_id ? mockDb.getCourseById(userBadge.course_id) : null;
+      const badge = db.badges.find(b => b.id === userBadge.badge_id);
+      const course = userBadge.course_id ? db.getCourseById(userBadge.course_id) : null;
       
       return {
         id: userBadge.id,
@@ -118,7 +119,7 @@ router.get('/my-badges', authenticateToken, (req, res) => {
 
     // Obtener insignias disponibles que aún no se han obtenido
     const earnedBadgeIds = userBadges.map(ub => ub.badge_id);
-    const availableBadges = mockDb.badges
+    const availableBadges = db.badges
       .filter(badge => badge.is_active && !earnedBadgeIds.includes(badge.id))
       .map(badge => ({
         id: badge.id,
@@ -166,7 +167,7 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Verificar que el usuario existe
-    const user = mockDb.findUserById(user_id);
+    const user = db.findUserById(user_id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -175,7 +176,7 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Verificar que la insignia existe
-    const badge = mockDb.badges.find(b => b.id === badge_id);
+    const badge = db.badges.find(b => b.id === badge_id);
     if (!badge) {
       return res.status(404).json({
         success: false,
@@ -184,7 +185,7 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Verificar que el usuario no tiene ya esta insignia
-    const existingUserBadge = mockDb.userBadges.find(ub => 
+    const existingUserBadge = db.userBadges.find(ub => 
       ub.user_id === user_id && ub.badge_id === badge_id
     );
 
@@ -205,15 +206,15 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
       course_id: course_id || null
     };
 
-    mockDb.userBadges.push(newUserBadge);
+    db.userBadges.push(newUserBadge);
 
     // Actualizar estadísticas del usuario
-    const stats = mockDb.getUserStats(user_id);
+    const stats = db.getUserStats(user_id);
     if (stats) {
-      const statsIndex = mockDb.userStats.findIndex(s => s.user_id === user_id);
+      const statsIndex = db.userStats.findIndex(s => s.user_id === user_id);
       if (statsIndex !== -1) {
-        mockDb.userStats[statsIndex].total_badges_earned += 1;
-        mockDb.userStats[statsIndex].updated_at = new Date();
+        db.userStats[statsIndex].total_badges_earned += 1;
+        db.userStats[statsIndex].updated_at = new Date();
       }
     }
 
@@ -255,7 +256,7 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
       });
     }
 
-    const user = mockDb.findUserById(targetUserId);
+    const user = db.findUserById(targetUserId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -264,15 +265,15 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
     }
 
     // Obtener datos del usuario para verificar criterios
-    const userStats = mockDb.getUserStats(targetUserId);
-    const userEnrollments = mockDb.getUserCourses(targetUserId);
-    const userBadges = mockDb.userBadges.filter(ub => ub.user_id === targetUserId);
+    const userStats = db.getUserStats(targetUserId);
+    const userEnrollments = db.getUserCourses(targetUserId);
+    const userBadges = db.userBadges.filter(ub => ub.user_id === targetUserId);
     const earnedBadgeIds = userBadges.map(ub => ub.badge_id);
 
     const newlyEarnedBadges = [];
 
     // Verificar cada insignia disponible
-    mockDb.badges.forEach(badge => {
+    db.badges.forEach(badge => {
       if (!badge.is_active || earnedBadgeIds.includes(badge.id)) {
         return; // Saltar insignias ya obtenidas o inactivas
       }
@@ -287,12 +288,12 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
       }
 
       if (criteria.category && criteria.courses_completed) {
-        const categoryObj = mockDb.courseCategories.find(cat => 
+        const categoryObj = db.courseCategories.find(cat => 
           cat.name === criteria.category
         );
         if (categoryObj) {
           const categoryCompletedCourses = userEnrollments.filter(enrollment => {
-            const course = mockDb.getCourseById(enrollment.course_id);
+            const course = db.getCourseById(enrollment.course_id);
             return course && 
                    course.category_id === categoryObj.id && 
                    enrollment.status === 'completed';
@@ -315,7 +316,7 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
           awarded_by: null // Automático
         };
         
-        mockDb.userBadges.push(newUserBadge);
+        db.userBadges.push(newUserBadge);
         newlyEarnedBadges.push({
           user_badge: newUserBadge,
           badge: {
@@ -331,10 +332,10 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
 
     // Actualizar estadísticas si se obtuvieron nuevas insignias
     if (newlyEarnedBadges.length > 0 && userStats) {
-      const statsIndex = mockDb.userStats.findIndex(s => s.user_id === targetUserId);
+      const statsIndex = db.userStats.findIndex(s => s.user_id === targetUserId);
       if (statsIndex !== -1) {
-        mockDb.userStats[statsIndex].total_badges_earned += newlyEarnedBadges.length;
-        mockDb.userStats[statsIndex].updated_at = new Date();
+        db.userStats[statsIndex].total_badges_earned += newlyEarnedBadges.length;
+        db.userStats[statsIndex].updated_at = new Date();
       }
     }
 
@@ -359,8 +360,8 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
 // Obtener estadísticas globales de insignias (solo admin)
 router.get('/stats', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const badgeStats = mockDb.badges.map(badge => {
-      const userBadgesCount = mockDb.userBadges.filter(ub => ub.badge_id === badge.id).length;
+    const badgeStats = db.badges.map(badge => {
+      const userBadgesCount = db.userBadges.filter(ub => ub.badge_id === badge.id).length;
       
       return {
         badge: {
@@ -370,15 +371,15 @@ router.get('/stats', authenticateToken, requireAdmin, (req, res) => {
           rarity: badge.rarity
         },
         total_awarded: userBadgesCount,
-        percentage_of_users: mockDb.users.length > 0 ? 
-          Math.round((userBadgesCount / mockDb.users.length) * 100) : 0
+        percentage_of_users: db.users.length > 0 ? 
+          Math.round((userBadgesCount / db.users.length) * 100) : 0
       };
     });
 
     // Estadísticas generales
-    const totalBadges = mockDb.badges.length;
-    const totalAwarded = mockDb.userBadges.length;
-    const totalUsers = mockDb.users.length;
+    const totalBadges = db.badges.length;
+    const totalAwarded = db.userBadges.length;
+    const totalUsers = db.users.length;
     const avgBadgesPerUser = totalUsers > 0 ? totalAwarded / totalUsers : 0;
 
     res.json({

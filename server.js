@@ -1,8 +1,7 @@
 const express = require('express');
 const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
 const morgan = require('morgan');
+const db = require('./database');
 
 // Importar rutas
 const authRoutes = require('./routes/auth');
@@ -103,12 +102,19 @@ app.use('*', (req, res) => {
   });
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor LMS iniciado en puerto ${PORT}`);
-  console.log(`📋 Documentación: http://localhost:${PORT}/`);
-  console.log(`🔍 Health check: http://localhost:${PORT}/health`);
-  console.log(`🌟 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-});
+(async () => {
+  try {
+    await db.initialize(); 
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor LMS iniciado en puerto ${PORT}`);
+      console.log(`📋 Documentación: http://localhost:${PORT}/`);
+      console.log(`🔍 Health check: http://localhost:${PORT}/health`);
+      console.log(`🌟 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } catch (error) {
+    console.error('❌ Error al inicializar la base de datos:', error);
+    process.exit(1);
+  }
+})();
 
 module.exports = app;

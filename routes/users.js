@@ -3,15 +3,15 @@ const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireSelfOrAdmin, requireAdmin } = require('../middleware/auth');
 const mockDb = require('../data/mockDatabase');
+const db = require('../database');
 
 const router = express.Router();
 
 // Obtener perfil del usuario
-router.get('/:id', authenticateToken, requireSelfOrAdmin, (req, res) => {
+router.get('/:id', authenticateToken, requireSelfOrAdmin, async(req, res) => {
   try {
     const { id } = req.params;
-    const user = mockDb.findUserById(id);
-    
+    const user = await db.findUserById(id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -20,15 +20,15 @@ router.get('/:id', authenticateToken, requireSelfOrAdmin, (req, res) => {
     }
 
     // Obtener estadísticas del usuario
-    const stats = mockDb.getUserStats(id);
-    const badges = mockDb.getUserBadges(id);
-    const enrollments = mockDb.getUserCourses(id);
-
+    const stats = await db.getUserStats(id);
+    const badges = await db.getUserBadges(id);
+    const enrollments = await db.getUserCourses(id);
+  
     // Enriquecer inscripciones con información del curso
-    const enrichedEnrollments = enrollments.map(enrollment => {
-      const course = mockDb.getCourseById(enrollment.course_id);
-      const category = course ? mockDb.courseCategories.find(cat => cat.id === course.category_id) : null;
-      
+    const enrichedEnrollments = await Promise.all (enrollments.map(enrollment => {
+      const course = db.getCourseById(enrollment.course_id);
+      const category = course ? db.getCourseCategories(cat => cat.id === course.category_id) : null;
+
       return {
         ...enrollment,
         course: course ? {
@@ -42,7 +42,7 @@ router.get('/:id', authenticateToken, requireSelfOrAdmin, (req, res) => {
           } : null
         } : null
       };
-    });
+    }));
 
     // Remover contraseña de la respuesta
     const { password: _, ...userResponse } = user;
@@ -93,7 +93,7 @@ router.put('/:id', authenticateToken, requireSelfOrAdmin, [
     .optional()
     .isURL()
     .withMessage('URL del avatar debe ser válida')
-], (req, res) => {
+], async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -107,7 +107,7 @@ router.put('/:id', authenticateToken, requireSelfOrAdmin, [
     const { id } = req.params;
     const { name, department, position, avatar_url } = req.body;
 
-    const user = mockDb.findUserById(id);
+    const user = await db.findUserById(id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -122,7 +122,7 @@ router.put('/:id', authenticateToken, requireSelfOrAdmin, [
     if (position !== undefined) updateData.position = position;
     if (avatar_url !== undefined) updateData.avatar_url = avatar_url;
 
-    const updatedUser = mockDb.updateUser(id, updateData);
+    const updatedUser = await db.updateUser(id, updateData);
 
     // Remover contraseña de la respuesta
     const { password: _, ...userResponse } = updatedUser;
@@ -174,7 +174,7 @@ router.put('/:id/password', authenticateToken, requireSelfOrAdmin, [
     const { id } = req.params;
     const { current_password, new_password } = req.body;
 
-    const user = mockDb.findUserById(id);
+    const user = await db.findUserById(id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -197,7 +197,7 @@ router.put('/:id/password', authenticateToken, requireSelfOrAdmin, [
     const hashedNewPassword = await bcrypt.hash(new_password, 12);
 
     // Actualizar contraseña
-    mockDb.updateUser(id, { password: hashedNewPassword });
+    await db.updateUser(id, { password: hashedNewPassword });
 
     res.json({
       success: true,
@@ -214,12 +214,12 @@ router.put('/:id/password', authenticateToken, requireSelfOrAdmin, [
 });
 
 // Obtener cursos del usuario
-router.get('/:id/courses', authenticateToken, requireSelfOrAdmin, (req, res) => {
+router.get('/:id/courses', authenticateToken, requireSelfOrAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.query; // active, completed, all
 
-    let enrollments = mockDb.getUserCourses(id);
+    let enrollments = await db.getUserCourses(id);
 
     // Filtrar por estado si se especifica
     if (status && status !== 'all') {
@@ -227,15 +227,15 @@ router.get('/:id/courses', authenticateToken, requireSelfOrAdmin, (req, res) => 
     }
 
     // Enriquecer con información del curso
-    const enrichedEnrollments = enrollments.map(enrollment => {
-      const course = mockDb.getCourseById(enrollment.course_id);
-      const category = course ? mockDb.courseCategories.find(cat => cat.id === course.category_id) : null;
-      const instructor = course ? mockDb.findUserById(course.instructor_id) : null;
-      
+    const enrichedEnrollments = await Promise.all (enrollments.map(async enrollment => {
+      const course = await db.getCourseById(enrollment.course_id);
+      const category = course ? await db.getCourseCategories(cat => cat.id === course.category_id) : null;
+      const instructor = course ? await db.findUserById(course.instructor_id) : null;
+
       // Obtener progreso de capítulos
-      const chapterProgress = mockDb.getChapterProgress(id, enrollment.course_id);
-      const courseChapters = course ? mockDb.getCourseChapters(course.id) : [];
-      
+      const chapterProgress = await db.getChapterProgress(id, enrollment.course_id);
+      const courseChapters = course ? await db.getCourseChapters(course.id) : [];
+
       return {
         ...enrollment,
         course: course ? {
@@ -252,7 +252,7 @@ router.get('/:id/courses', authenticateToken, requireSelfOrAdmin, (req, res) => 
           completed_chapters: chapterProgress.filter(cp => cp.is_completed).length
         } : null
       };
-    });
+    }));
 
     res.json({
       success: true,
@@ -272,11 +272,11 @@ router.get('/:id/courses', authenticateToken, requireSelfOrAdmin, (req, res) => 
 });
 
 // Obtener estadísticas del usuario
-router.get('/:id/stats', authenticateToken, requireSelfOrAdmin, (req, res) => {
+router.get('/:id/stats', authenticateToken, requireSelfOrAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
-    const user = mockDb.findUserById(id);
+    const user = await db.findUserById(id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -284,9 +284,9 @@ router.get('/:id/stats', authenticateToken, requireSelfOrAdmin, (req, res) => {
       });
     }
 
-    const stats = mockDb.getUserStats(id);
-    const badges = mockDb.getUserBadges(id);
-    const enrollments = mockDb.getUserCourses(id);
+    const stats = await db.getUserStats(id);
+    const badges = await db.getUserBadges(id);
+    const enrollments = await db.getUserCourses(id);
 
     // Calcular estadísticas adicionales
     const completedCourses = enrollments.filter(e => e.status === 'completed');
@@ -295,9 +295,9 @@ router.get('/:id/stats', authenticateToken, requireSelfOrAdmin, (req, res) => {
     // Progreso por categoría
     const progressByCategory = {};
     enrollments.forEach(enrollment => {
-      const course = mockDb.getCourseById(enrollment.course_id);
+      const course = db.getCourseById(enrollment.course_id);
       if (course) {
-        const category = mockDb.courseCategories.find(cat => cat.id === course.category_id);
+        const category = db.getCourseCategories(cat => cat.id === course.category_id);
         if (category) {
           if (!progressByCategory[category.name]) {
             progressByCategory[category.name] = {
@@ -328,7 +328,7 @@ router.get('/:id/stats', authenticateToken, requireSelfOrAdmin, (req, res) => {
         },
         badges: badges.map(badge => ({
           ...badge,
-          earned_date: mockDb.userBadges.find(ub => 
+          earned_date: db.getUserBadges(ub => 
             ub.user_id === id && ub.badge_id === badge.id
           )?.earned_at
         })),
@@ -346,11 +346,11 @@ router.get('/:id/stats', authenticateToken, requireSelfOrAdmin, (req, res) => {
 });
 
 // Obtener lista de usuarios (solo admin)
-router.get('/', authenticateToken, requireAdmin, (req, res) => {
+router.get('/', authenticateToken, requireAdmin, async(req, res) => {
   try {
     const { role, department, search, page = 1, limit = 20 } = req.query;
     
-    let users = mockDb.users.filter(user => user.is_active);
+    let users = await db.users.filter(user => user.is_active);
 
     // Filtros
     if (role && role !== 'all') {
@@ -377,20 +377,20 @@ router.get('/', authenticateToken, requireAdmin, (req, res) => {
     const paginatedUsers = users.slice(startIndex, endIndex);
 
     // Remover contraseñas y enriquecer con estadísticas básicas
-    const enrichedUsers = paginatedUsers.map(user => {
+    const enrichedUsers = await Promise.all (paginatedUsers.map(user => {
       const { password: _, ...userWithoutPassword } = user;
-      const stats = mockDb.getUserStats(user.id);
-      const enrollments = mockDb.getUserCourses(user.id);
+      const stats = db.getUserStats(user.id);
+      const enrollments = db.getUserCourses(user.id);
       
       return {
         ...userWithoutPassword,
         stats: {
           total_courses: enrollments.length,
           completed_courses: enrollments.filter(e => e.status === 'completed').length,
-          total_badges: mockDb.getUserBadges(user.id).length
+          total_badges: db.getUserBadges(user.id).length
         }
       };
-    });
+    }));
 
     res.json({
       success: true,

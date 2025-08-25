@@ -1,7 +1,8 @@
 const jwt = require('jsonwebtoken');
 const mockDb = require('../data/mockDatabase');
+const db = require('../database');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'lms-corporativo-secret-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET || 'lms-corporativo-secret-key-2025';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
 // Generar JWT token
@@ -43,7 +44,7 @@ const authenticateToken = (req, res, next) => {
     }
 
     // Verificar que el usuario aún existe y está activo
-    const user = mockDb.findUserById(decoded.id);
+    const user = db.findUserById(decoded.id);
     if (!user || !user.is_active) {
       return res.status(401).json({
         success: false,
@@ -105,7 +106,7 @@ const optionalAuth = (req, res, next) => {
   if (token) {
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
       if (!err) {
-        const user = mockDb.findUserById(decoded.id);
+        const user = db.findUserById(decoded.id);
         if (user && user.is_active) {
           req.user = decoded;
         }

@@ -5,21 +5,21 @@ const createMockUsers = async () => {
   
   return [
     {
-      id: 'user-1',
-      email: 'estudiante@empresa.com',
+      id: '00000000-0000-0000-0000-000000000001',
+      email: 'estudiante@bancodebogota.com.co',
       password: hashedPassword,
       name: 'María González',
       role: 'student',
       avatar_url: 'https://images.unsplash.com/photo-1494790108755-2616b332c8de?w=100&h=100&fit=crop&crop=face',
       department: 'Tecnología',
-      position: 'Desarrollador Senior',
+      position: 'Desarrollador Se',
       created_at: new Date('2024-01-01'),
       last_login: new Date(),
       is_active: true
     },
     {
       id: 'user-2',
-      email: 'admin@empresa.com',
+      email: 'admin@bancodebogota.com.co',
       password: hashedPassword,
       name: 'Carlos Ramírez',
       role: 'admin',
@@ -32,7 +32,7 @@ const createMockUsers = async () => {
     },
     {
       id: 'user-3',
-      email: 'ana.martinez@empresa.com',
+      email: 'ana.martinez@bancodebogota.com.co',
       password: hashedPassword,
       name: 'Dr. Ana Martínez',
       role: 'instructor',

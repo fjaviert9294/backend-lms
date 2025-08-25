@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const { generateToken, authenticateToken } = require('../middleware/auth');
 const mockDb = require('../data/mockDatabase');
+const db = require('../database');
 
 const router = express.Router();
 
@@ -51,7 +52,7 @@ router.post('/register', registerValidation, async (req, res) => {
     const { email, password, name, role = 'student', department, position } = req.body;
 
     // Verificar si el usuario ya existe
-    const existingUser = mockDb.findUserByEmail(email);
+    const existingUser = db.findUserByEmail(email);
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -63,7 +64,7 @@ router.post('/register', registerValidation, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
 
     // Crear nuevo usuario
-    const newUser = mockDb.addUser({
+    const newUser = await db.addUser({
       email,
       password: hashedPassword,
       name,
@@ -114,7 +115,7 @@ router.post('/login', loginValidation, async (req, res) => {
     const { email, password } = req.body;
 
     // Buscar usuario
-    const user = mockDb.findUserByEmail(email);
+    const user = await db.findUserByEmail(email);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -140,7 +141,7 @@ router.post('/login', loginValidation, async (req, res) => {
     }
 
     // Actualizar último login
-    mockDb.updateUser(user.id, { last_login: new Date() });
+    await db.updateUser(user.id, { last_login: new Date() });
 
     // Generar token
     const token = generateToken(user);
@@ -168,9 +169,9 @@ router.post('/login', loginValidation, async (req, res) => {
 });
 
 // Verificar token y obtener información del usuario
-router.get('/me', authenticateToken, (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = mockDb.findUserById(req.user.id);
+    const user = await db.findUserById(req.user.id);
     
     if (!user) {
       return res.status(404).json({
@@ -199,9 +200,9 @@ router.get('/me', authenticateToken, (req, res) => {
 });
 
 // Refrescar token
-router.post('/refresh', authenticateToken, (req, res) => {
+router.post('/refresh', authenticateToken, async (req, res) => {
   try {
-    const user = mockDb.findUserById(req.user.id);
+    const user = await db.findUserById(req.user.id);
     
     if (!user || !user.is_active) {
       return res.status(401).json({

@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const mockDb = require('../data/mockDatabase');
+const db = require('../database');
 
 const router = express.Router();
 
@@ -9,38 +10,38 @@ const router = express.Router();
 router.get('/dashboard', authenticateToken, requireAdmin, (req, res) => {
   try {
     // Estadísticas de usuarios
-    const totalUsers = mockDb.users.filter(u => u.is_active).length;
+    const totalUsers = db.users.filter(u => u.is_active).length;
     const usersByRole = {
-      student: mockDb.users.filter(u => u.role === 'student' && u.is_active).length,
-      instructor: mockDb.users.filter(u => u.role === 'instructor' && u.is_active).length,
-      admin: mockDb.users.filter(u => u.role === 'admin' && u.is_active).length
+      student: db.users.filter(u => u.role === 'student' && u.is_active).length,
+      instructor: db.users.filter(u => u.role === 'instructor' && u.is_active).length,
+      admin: db.users.filter(u => u.role === 'admin' && u.is_active).length
     };
 
     // Estadísticas de cursos
-    const totalCourses = mockDb.courses.length;
+    const totalCourses = db.courses.length;
     const coursesByStatus = {
-      published: mockDb.courses.filter(c => c.status === 'published').length,
-      draft: mockDb.courses.filter(c => c.status === 'draft').length,
-      archived: mockDb.courses.filter(c => c.status === 'archived').length
+      published: db.courses.filter(c => c.status === 'published').length,
+      draft: db.courses.filter(c => c.status === 'draft').length,
+      archived: db.courses.filter(c => c.status === 'archived').length
     };
 
     // Estadísticas de inscripciones
-    const totalEnrollments = mockDb.courseEnrollments.length;
+    const totalEnrollments = db.courseEnrollments.length;
     const enrollmentsByStatus = {
-      active: mockDb.courseEnrollments.filter(e => e.status === 'active').length,
-      completed: mockDb.courseEnrollments.filter(e => e.status === 'completed').length,
-      dropped: mockDb.courseEnrollments.filter(e => e.status === 'dropped').length
+      active: db.courseEnrollments.filter(e => e.status === 'active').length,
+      completed: db.courseEnrollments.filter(e => e.status === 'completed').length,
+      dropped: db.courseEnrollments.filter(e => e.status === 'dropped').length
     };
 
     // Estadísticas de insignias
-    const totalBadgesAwarded = mockDb.userBadges.length;
-    const totalBadgesAvailable = mockDb.badges.filter(b => b.is_active).length;
+    const totalBadgesAwarded = db.userBadges.length;
+    const totalBadgesAvailable = db.badges.filter(b => b.is_active).length;
 
     // Cursos más populares
-    const coursesWithEnrollments = mockDb.courses.map(course => {
-      const enrollmentCount = mockDb.courseEnrollments.filter(e => e.course_id === course.id).length;
+    const coursesWithEnrollments = db.courses.map(course => {
+      const enrollmentCount = db.courseEnrollments.filter(e => e.course_id === course.id).length;
       const completionRate = enrollmentCount > 0 ? 
-        (mockDb.courseEnrollments.filter(e => e.course_id === course.id && e.status === 'completed').length / enrollmentCount) * 100 : 0;
+        (db.courseEnrollments.filter(e => e.course_id === course.id && e.status === 'completed').length / enrollmentCount) * 100 : 0;
       
       return {
         id: course.id,
@@ -52,12 +53,12 @@ router.get('/dashboard', authenticateToken, requireAdmin, (req, res) => {
     }).sort((a, b) => b.enrollments - a.enrollments).slice(0, 5);
 
     // Actividad reciente
-    const recentEnrollments = mockDb.courseEnrollments
+    const recentEnrollments = db.courseEnrollments
       .sort((a, b) => new Date(b.enrolled_at) - new Date(a.enrolled_at))
       .slice(0, 10)
       .map(enrollment => {
-        const user = mockDb.findUserById(enrollment.user_id);
-        const course = mockDb.getCourseById(enrollment.course_id);
+        const user = db.findUserById(enrollment.user_id);
+        const course = db.getCourseById(enrollment.course_id);
         return {
           id: enrollment.id,
           user: user ? { id: user.id, name: user.name, email: user.email } : null,
@@ -68,12 +69,12 @@ router.get('/dashboard', authenticateToken, requireAdmin, (req, res) => {
       });
 
     // Insignias recientes
-    const recentBadges = mockDb.userBadges
+    const recentBadges = db.userBadges
       .sort((a, b) => new Date(b.earned_at) - new Date(a.earned_at))
       .slice(0, 10)
       .map(userBadge => {
-        const user = mockDb.findUserById(userBadge.user_id);
-        const badge = mockDb.badges.find(b => b.id === userBadge.badge_id);
+        const user = db.findUserById(userBadge.user_id);
+        const badge = db.badges.find(b => b.id === userBadge.badge_id);
         return {
           id: userBadge.id,
           user: user ? { id: user.id, name: user.name, email: user.email } : null,
@@ -126,7 +127,7 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
       sort_order = 'desc'
     } = req.query;
     
-    let users = mockDb.users;
+    let users = db.users;
 
     // Filtrar por estado
     if (status !== 'all') {
@@ -180,9 +181,9 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
     // Enriquecer con estadísticas
     const enrichedUsers = paginatedUsers.map(user => {
       const { password: _, ...userWithoutPassword } = user;
-      const stats = mockDb.getUserStats(user.id);
-      const enrollments = mockDb.getUserCourses(user.id);
-      const badges = mockDb.getUserBadges(user.id);
+      const stats = db.getUserStats(user.id);
+      const enrollments = db.getUserCourses(user.id);
+      const badges = db.getUserBadges(user.id);
       
       return {
         ...userWithoutPassword,
@@ -230,7 +231,7 @@ router.put('/users/:id/toggle-status', authenticateToken, requireAdmin, (req, re
       });
     }
 
-    const user = mockDb.findUserById(id);
+    const user = db.findUserById(id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -239,7 +240,7 @@ router.put('/users/:id/toggle-status', authenticateToken, requireAdmin, (req, re
     }
 
     const newStatus = !user.is_active;
-    const updatedUser = mockDb.updateUser(id, { is_active: newStatus });
+    const updatedUser = db.updateUser(id, { is_active: newStatus });
 
     res.json({
       success: true,
@@ -289,7 +290,7 @@ router.put('/users/:id/role', authenticateToken, requireAdmin, [
       });
     }
 
-    const user = mockDb.findUserById(id);
+    const user = db.findUserById(id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -297,7 +298,7 @@ router.put('/users/:id/role', authenticateToken, requireAdmin, [
       });
     }
 
-    const updatedUser = mockDb.updateUser(id, { role });
+    const updatedUser = db.updateUser(id, { role });
 
     res.json({
       success: true,
@@ -324,14 +325,14 @@ router.put('/users/:id/role', authenticateToken, requireAdmin, [
 // Gestión de cursos - Estadísticas detalladas
 router.get('/courses/stats', authenticateToken, requireAdmin, (req, res) => {
   try {
-    const coursesWithStats = mockDb.courses.map(course => {
-      const enrollments = mockDb.courseEnrollments.filter(e => e.course_id === course.id);
+    const coursesWithStats = db.courses.map(course => {
+      const enrollments = db.courseEnrollments.filter(e => e.course_id === course.id);
       const completedEnrollments = enrollments.filter(e => e.status === 'completed');
       const activeEnrollments = enrollments.filter(e => e.status === 'active');
       
-      const totalChapters = mockDb.getCourseChapters(course.id).length;
-      const instructor = mockDb.findUserById(course.instructor_id);
-      const category = mockDb.courseCategories.find(cat => cat.id === course.category_id);
+      const totalChapters = db.getCourseChapters(course.id).length;
+      const instructor = db.findUserById(course.instructor_id);
+      const category = db.courseCategories.find(cat => cat.id === course.category_id);
       
       // Calcular tiempo promedio de finalización
       let avgCompletionTime = 0;
@@ -405,20 +406,20 @@ router.get('/reports/activity', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Inscripciones en el período
-    const enrollmentsInPeriod = mockDb.courseEnrollments.filter(e => {
+    const enrollmentsInPeriod = db.courseEnrollments.filter(e => {
       const enrollDate = new Date(e.enrolled_at);
       return enrollDate >= startDate && enrollDate <= endDate;
     });
 
     // Completaciones en el período
-    const completionsInPeriod = mockDb.courseEnrollments.filter(e => {
+    const completionsInPeriod = db.courseEnrollments.filter(e => {
       if (!e.completed_at) return false;
       const completeDate = new Date(e.completed_at);
       return completeDate >= startDate && completeDate <= endDate;
     });
 
     // Insignias otorgadas en el período
-    const badgesInPeriod = mockDb.userBadges.filter(ub => {
+    const badgesInPeriod = db.userBadges.filter(ub => {
       const earnedDate = new Date(ub.earned_at);
       return earnedDate >= startDate && earnedDate <= endDate;
     });
@@ -465,7 +466,7 @@ router.get('/reports/activity', authenticateToken, requireAdmin, (req, res) => {
 
     const topActiveCourses = Object.entries(courseActivity)
       .map(([courseId, activity]) => {
-        const course = mockDb.getCourseById(courseId);
+        const course = db.getCourseById(courseId);
         return {
           course: course ? { id: course.id, title: course.title } : null,
           ...activity

@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 const mockDb = require('../data/mockDatabase');
+const db = require('../database');
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ router.get('/', authenticateToken, (req, res) => {
   try {
     const { is_read, type, limit = 20, offset = 0 } = req.query;
     
-    let notifications = mockDb.getUserNotifications(req.user.id);
+    let notifications = db.getUserNotifications(req.user.id);
 
     // Filtrar por estado de lectura
     if (is_read !== undefined) {
@@ -57,7 +58,7 @@ router.put('/:id/read', authenticateToken, (req, res) => {
     const { id } = req.params;
     
     // Verificar que la notificación existe y pertenece al usuario
-    const notification = mockDb.notifications.find(n => 
+    const notification = db.notifications.find(n => 
       n.id === id && n.user_id === req.user.id
     );
 
@@ -76,7 +77,7 @@ router.put('/:id/read', authenticateToken, (req, res) => {
     }
 
     // Marcar como leída
-    const updatedNotification = mockDb.markNotificationAsRead(id);
+    const updatedNotification = db.markNotificationAsRead(id);
 
     res.json({
       success: true,
@@ -98,13 +99,13 @@ router.put('/:id/read', authenticateToken, (req, res) => {
 // Marcar todas las notificaciones como leídas
 router.put('/read-all', authenticateToken, (req, res) => {
   try {
-    const userNotifications = mockDb.notifications.filter(n => 
+    const userNotifications = db.notifications.filter(n => 
       n.user_id === req.user.id && !n.is_read
     );
 
     let updatedCount = 0;
     userNotifications.forEach(notification => {
-      mockDb.markNotificationAsRead(notification.id);
+      db.markNotificationAsRead(notification.id);
       updatedCount++;
     });
 
@@ -131,7 +132,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     
     // Verificar que la notificación existe y pertenece al usuario
-    const notificationIndex = mockDb.notifications.findIndex(n => 
+    const notificationIndex = db.notifications.findIndex(n => 
       n.id === id && n.user_id === req.user.id
     );
 
@@ -143,7 +144,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
     }
 
     // Eliminar notificación
-    mockDb.notifications.splice(notificationIndex, 1);
+    db.notifications.splice(notificationIndex, 1);
 
     res.json({
       success: true,
@@ -202,7 +203,7 @@ router.post('/', authenticateToken, requireAdmin, [
     } = req.body;
 
     // Verificar que el usuario destinatario existe
-    const targetUser = mockDb.findUserById(user_id);
+    const targetUser = db.findUserById(user_id);
     if (!targetUser) {
       return res.status(404).json({
         success: false,
@@ -224,7 +225,7 @@ router.post('/', authenticateToken, requireAdmin, [
       created_at: new Date()
     };
 
-    mockDb.notifications.push(newNotification);
+    db.notifications.push(newNotification);
 
     res.status(201).json({
       success: true,
@@ -290,7 +291,7 @@ router.post('/broadcast', authenticateToken, requireAdmin, [
     const invalidUserIds = [];
 
     user_ids.forEach(userId => {
-      const user = mockDb.findUserById(userId);
+      const user = db.findUserById(userId);
       if (user && user.is_active) {
         validUserIds.push(userId);
       } else {
@@ -316,7 +317,7 @@ router.post('/broadcast', authenticateToken, requireAdmin, [
         created_at: timestamp
       };
 
-      mockDb.notifications.push(notification);
+      db.notifications.push(notification);
       createdNotifications.push(notification);
     });
 
@@ -343,7 +344,7 @@ router.post('/broadcast', authenticateToken, requireAdmin, [
 // Obtener estadísticas de notificaciones del usuario
 router.get('/stats', authenticateToken, (req, res) => {
   try {
-    const userNotifications = mockDb.getUserNotifications(req.user.id);
+    const userNotifications = db.getUserNotifications(req.user.id);
     
     const stats = {
       total: userNotifications.length,
