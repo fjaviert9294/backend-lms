@@ -1,14 +1,14 @@
 const express = require('express');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const mockDb = require('../data/mockDatabase');
 const db = require('../database');
+const mockDb = require('../data/mockDatabase');
 
 const router = express.Router();
 
 // Obtener todas las insignias disponibles
-router.get('/', (req, res) => {
+router.get('/', async(req, res) => {
   try {
-    const badges = db.badges.filter(badge => badge.is_active);
+    const badges = await db.badges.filter(badge => badge.is_active);
     
     res.json({
       success: true,
@@ -34,7 +34,7 @@ router.get('/', (req, res) => {
 });
 
 // Obtener insignias de un usuario específico
-router.get('/user/:userId', authenticateToken, (req, res) => {
+router.get('/user/:userId', authenticateToken, async(req, res) => {
   try {
     const { userId } = req.params;
     
@@ -46,10 +46,10 @@ router.get('/user/:userId', authenticateToken, (req, res) => {
       });
     }
 
-    const userBadges = db.userBadges.filter(ub => ub.user_id === userId);
+    const userBadges = await db.userBadges.filter(ub => ub.user_id === userId);
     
     // Enriquecer con información de la insignia
-    const enrichedBadges = userBadges.map(userBadge => {
+    const enrichedBadges = await Promise.all (userBadges.map(userBadge => {
       const badge = db.badges.find(b => b.id === userBadge.badge_id);
       const course = userBadge.course_id ? db.getCourseById(userBadge.course_id) : null;
       
@@ -68,7 +68,7 @@ router.get('/user/:userId', authenticateToken, (req, res) => {
           title: course.title
         } : null
       };
-    });
+    }));
 
     // Ordenar por fecha de obtención (más recientes primero)
     enrichedBadges.sort((a, b) => new Date(b.earned_at) - new Date(a.earned_at));
@@ -91,15 +91,18 @@ router.get('/user/:userId', authenticateToken, (req, res) => {
 });
 
 // Obtener insignias del usuario autenticado
-router.get('/my-badges', authenticateToken, (req, res) => {
+router.get('/my-badges', authenticateToken, async(req, res) => {
   try {
-    const userBadges = db.userBadges.filter(ub => ub.user_id === req.user.id);
+    const userBadges = await db.getUserBadges(req.user.id);
     
     // Enriquecer con información de la insignia
-    const enrichedBadges = userBadges.map(userBadge => {
-      const badge = db.badges.find(b => b.id === userBadge.badge_id);
+    const enrichedBadges = await Promise.all (userBadges.map(async userBadge => {
+      const badge2 = await db.getBadges();
+      const badge = badge2.find(b => b.id === userBadge.badge_id);
+      console.log('first', badge2)
+      // const badge = await db.getBadges.find(b => b.id === userBadge.badge_id);
       const course = userBadge.course_id ? db.getCourseById(userBadge.course_id) : null;
-      
+
       return {
         id: userBadge.id,
         earned_at: userBadge.earned_at,
@@ -115,11 +118,12 @@ router.get('/my-badges', authenticateToken, (req, res) => {
           title: course.title
         } : null
       };
-    });
+    }));
 
     // Obtener insignias disponibles que aún no se han obtenido
     const earnedBadgeIds = userBadges.map(ub => ub.badge_id);
-    const availableBadges = db.badges
+    const badge2 = await db.getBadges();
+    const availableBadges = badge2
       .filter(badge => badge.is_active && !earnedBadgeIds.includes(badge.id))
       .map(badge => ({
         id: badge.id,
@@ -154,7 +158,7 @@ router.get('/my-badges', authenticateToken, (req, res) => {
 });
 
 // Otorgar insignia a un usuario (solo admin)
-router.post('/award', authenticateToken, requireAdmin, (req, res) => {
+router.post('/award', authenticateToken, requireAdmin, async(req, res) => {
   try {
     const { user_id, badge_id, course_id } = req.body;
 
@@ -167,7 +171,7 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Verificar que el usuario existe
-    const user = db.findUserById(user_id);
+    const user = await db.findUserById(user_id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -176,7 +180,7 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Verificar que la insignia existe
-    const badge = db.badges.find(b => b.id === badge_id);
+    const badge = await db.badges.find(b => b.id === badge_id);
     if (!badge) {
       return res.status(404).json({
         success: false,
@@ -185,7 +189,7 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Verificar que el usuario no tiene ya esta insignia
-    const existingUserBadge = db.userBadges.find(ub => 
+    const existingUserBadge = await db.userBadges.find(ub => 
       ub.user_id === user_id && ub.badge_id === badge_id
     );
 
@@ -206,12 +210,12 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
       course_id: course_id || null
     };
 
-    db.userBadges.push(newUserBadge);
+    await db.userBadges.push(newUserBadge);
 
     // Actualizar estadísticas del usuario
-    const stats = db.getUserStats(user_id);
+    const stats = await db.getUserStats(user_id);
     if (stats) {
-      const statsIndex = db.userStats.findIndex(s => s.user_id === user_id);
+      const statsIndex = await db.userStats.findIndex(s => s.user_id === user_id);
       if (statsIndex !== -1) {
         db.userStats[statsIndex].total_badges_earned += 1;
         db.userStats[statsIndex].updated_at = new Date();
@@ -243,7 +247,7 @@ router.post('/award', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Verificar si un usuario puede obtener nuevas insignias automáticamente
-router.post('/check-achievements', authenticateToken, (req, res) => {
+router.post('/check-achievements', authenticateToken, async(req, res) => {
   try {
     const { user_id } = req.body;
     const targetUserId = user_id || req.user.id;
@@ -256,7 +260,7 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
       });
     }
 
-    const user = db.findUserById(targetUserId);
+    const user = await db.findUserById(targetUserId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -265,15 +269,15 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
     }
 
     // Obtener datos del usuario para verificar criterios
-    const userStats = db.getUserStats(targetUserId);
-    const userEnrollments = db.getUserCourses(targetUserId);
-    const userBadges = db.userBadges.filter(ub => ub.user_id === targetUserId);
+    const userStats = await db.getUserStats(targetUserId);
+    const userEnrollments = await db.getUserCourses(targetUserId);
+    const userBadges = await db.getUserBadges(user.user_id);
     const earnedBadgeIds = userBadges.map(ub => ub.badge_id);
 
     const newlyEarnedBadges = [];
-
+    const badges = await db.getBadges();
     // Verificar cada insignia disponible
-    db.badges.forEach(badge => {
+    await badges.forEach(badge => {
       if (!badge.is_active || earnedBadgeIds.includes(badge.id)) {
         return; // Saltar insignias ya obtenidas o inactivas
       }
@@ -288,9 +292,7 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
       }
 
       if (criteria.category && criteria.courses_completed) {
-        const categoryObj = db.courseCategories.find(cat => 
-          cat.name === criteria.category
-        );
+        const categoryObj = db.getCourseCategories();
         if (categoryObj) {
           const categoryCompletedCourses = userEnrollments.filter(enrollment => {
             const course = db.getCourseById(enrollment.course_id);
@@ -314,25 +316,13 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
           badge_id: badge.id,
           earned_at: new Date(),
           awarded_by: null // Automático
-        };
-        
-        db.userBadges.push(newUserBadge);
-        newlyEarnedBadges.push({
-          user_badge: newUserBadge,
-          badge: {
-            id: badge.id,
-            name: badge.name,
-            description: badge.description,
-            icon: badge.icon,
-            rarity: badge.rarity
-          }
-        });
+        };        
       }
     });
 
     // Actualizar estadísticas si se obtuvieron nuevas insignias
     if (newlyEarnedBadges.length > 0 && userStats) {
-      const statsIndex = db.userStats.findIndex(s => s.user_id === targetUserId);
+      const statsIndex = await db.userStats.findIndex(s => s.user_id === targetUserId);
       if (statsIndex !== -1) {
         db.userStats[statsIndex].total_badges_earned += newlyEarnedBadges.length;
         db.userStats[statsIndex].updated_at = new Date();
@@ -358,9 +348,9 @@ router.post('/check-achievements', authenticateToken, (req, res) => {
 });
 
 // Obtener estadísticas globales de insignias (solo admin)
-router.get('/stats', authenticateToken, requireAdmin, (req, res) => {
+router.get('/stats', authenticateToken, requireAdmin, async(req, res) => {
   try {
-    const badgeStats = db.badges.map(badge => {
+    const badgeStats = await Promise.all (db.badges.map(badge => {
       const userBadgesCount = db.userBadges.filter(ub => ub.badge_id === badge.id).length;
       
       return {
@@ -374,12 +364,12 @@ router.get('/stats', authenticateToken, requireAdmin, (req, res) => {
         percentage_of_users: db.users.length > 0 ? 
           Math.round((userBadgesCount / db.users.length) * 100) : 0
       };
-    });
+    }));
 
     // Estadísticas generales
-    const totalBadges = db.badges.length;
-    const totalAwarded = db.userBadges.length;
-    const totalUsers = db.users.length;
+    const totalBadges = await db.badges.length;
+    const totalAwarded = await db.userBadges.length;
+    const totalUsers = await db.users.length;
     const avgBadgesPerUser = totalUsers > 0 ? totalAwarded / totalUsers : 0;
 
     res.json({

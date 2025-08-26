@@ -10,6 +10,7 @@ const courseRoutes = require('./routes/courses');
 const badgeRoutes = require('./routes/badges');
 const notificationRoutes = require('./routes/notifications');
 const adminRoutes = require('./routes/admin');
+const s3Routes = require('./routes/s3');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -60,6 +61,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/badges', badgeRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/s3', s3Routes);
 
 // Middleware de manejo de errores
 app.use((err, req, res, next) => {

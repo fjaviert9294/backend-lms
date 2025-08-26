@@ -1,17 +1,16 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const mockDb = require('../data/mockDatabase');
 const db = require('../database');
 
 const router = express.Router();
 
 // Obtener notificaciones del usuario autenticado
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async(req, res) => {
   try {
     const { is_read, type, limit = 20, offset = 0 } = req.query;
     
-    let notifications = db.getUserNotifications(req.user.id);
+    let notifications = await db.getUserNotifications(req.user.id);
 
     // Filtrar por estado de lectura
     if (is_read !== undefined) {
@@ -53,12 +52,12 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // Marcar notificación como leída
-router.put('/:id/read', authenticateToken, (req, res) => {
+router.put('/:id/read', authenticateToken, async(req, res) => {
   try {
     const { id } = req.params;
     
     // Verificar que la notificación existe y pertenece al usuario
-    const notification = db.notifications.find(n => 
+    const notification = await db.notifications.find(n => 
       n.id === id && n.user_id === req.user.id
     );
 
@@ -77,7 +76,7 @@ router.put('/:id/read', authenticateToken, (req, res) => {
     }
 
     // Marcar como leída
-    const updatedNotification = db.markNotificationAsRead(id);
+    const updatedNotification = await db.markNotificationAsRead(id);
 
     res.json({
       success: true,
@@ -97,9 +96,9 @@ router.put('/:id/read', authenticateToken, (req, res) => {
 });
 
 // Marcar todas las notificaciones como leídas
-router.put('/read-all', authenticateToken, (req, res) => {
+router.put('/read-all', authenticateToken, async(req, res) => {
   try {
-    const userNotifications = db.notifications.filter(n => 
+    const userNotifications = await db.notifications.filter(n => 
       n.user_id === req.user.id && !n.is_read
     );
 
@@ -127,12 +126,12 @@ router.put('/read-all', authenticateToken, (req, res) => {
 });
 
 // Eliminar notificación
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', authenticateToken, async(req, res) => {
   try {
     const { id } = req.params;
     
     // Verificar que la notificación existe y pertenece al usuario
-    const notificationIndex = db.notifications.findIndex(n => 
+    const notificationIndex = await db.notifications.findIndex(n => 
       n.id === id && n.user_id === req.user.id
     );
 
@@ -144,7 +143,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
     }
 
     // Eliminar notificación
-    db.notifications.splice(notificationIndex, 1);
+    await db.notifications.splice(notificationIndex, 1);
 
     res.json({
       success: true,
@@ -181,7 +180,7 @@ router.post('/', authenticateToken, requireAdmin, [
     .optional()
     .isIn(['low', 'medium', 'high'])
     .withMessage('Prioridad debe ser low, medium o high')
-], (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -203,7 +202,7 @@ router.post('/', authenticateToken, requireAdmin, [
     } = req.body;
 
     // Verificar que el usuario destinatario existe
-    const targetUser = db.findUserById(user_id);
+    const targetUser = await db.findUserById(user_id);
     if (!targetUser) {
       return res.status(404).json({
         success: false,
@@ -225,7 +224,7 @@ router.post('/', authenticateToken, requireAdmin, [
       created_at: new Date()
     };
 
-    db.notifications.push(newNotification);
+    await db.notifications.push(newNotification);
 
     res.status(201).json({
       success: true,
@@ -265,7 +264,7 @@ router.post('/broadcast', authenticateToken, requireAdmin, [
     .optional()
     .isIn(['low', 'medium', 'high'])
     .withMessage('Prioridad debe ser low, medium o high')
-], (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -342,9 +341,9 @@ router.post('/broadcast', authenticateToken, requireAdmin, [
 });
 
 // Obtener estadísticas de notificaciones del usuario
-router.get('/stats', authenticateToken, (req, res) => {
+router.get('/stats', authenticateToken, async(req, res) => {
   try {
-    const userNotifications = db.getUserNotifications(req.user.id);
+    const userNotifications = await db.getUserNotifications(req.user.id);
     
     const stats = {
       total: userNotifications.length,

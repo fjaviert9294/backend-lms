@@ -33,32 +33,32 @@ class Database {
   }
 
   // ================================
-  // MÉTODOS DE COMPATIBILIDAD (para reemplazar mockDatabase)
+  // MÉTODOS DE COMPATIBILIDAD
   // ================================
 
   /**
-   * Buscar usuario por email (compatibilidad con mockDatabase)
+   * Buscar usuario por email 
    */
   async findUserByEmail(email) {
     return await this.users.findUserByEmail(email);
   }
 
   /**
-   * Buscar usuario por ID (compatibilidad con mockDatabase)
+   * Buscar usuario por ID 
    */
   async findUserById(id) {
     return await this.users.findUserById(id);
   }
 
   /**
-   * Obtener curso por ID (compatibilidad con mockDatabase)
+   * Obtener curso por ID 
    */
   async getCourseById(courseId, userId = null) {
     return await this.courses.getCourseById(courseId, userId);
   }
 
   /**
-   * Obtener capítulos de un curso (compatibilidad con mockDatabase)
+   * Obtener capítulos de un curso 
    */
   async getCourseChapters(courseId) {
     const course = await this.courses.getCourseById(courseId);
@@ -66,21 +66,28 @@ class Database {
   }
 
   /**
-   * Obtener cursos del usuario (compatibilidad con mockDatabase)
+   * Obtener cursos del usuario 
    */
   async getUserCourses(userId, status = null) {
     return await this.courses.getUserCourses(userId, status);
   }
 
   /**
-   * Obtener insignias del usuario (compatibilidad con mockDatabase)
+   * Obtener insignias del usuario 
    */
   async getUserBadges(userId) {
     return await this.badges.getUserBadges(userId);
   }
 
   /**
-   * Obtener notificaciones del usuario (compatibilidad con mockDatabase)
+   * Obtener todas las insignias
+   */
+  async getBadges() {
+    return await this.badges.getBadges();
+  }
+
+  /**
+   * Obtener notificaciones del usuario 
    */
   async getUserNotifications(userId, filters = {}) {
     const result = await this.notifications.getUserNotifications(userId, filters);
@@ -88,14 +95,14 @@ class Database {
   }
 
   /**
-   * Obtener estadísticas del usuario (compatibilidad con mockDatabase)
+   * Obtener estadísticas del usuario 
    */
   async getUserStats(userId) {
     return await this.users.getUserStats(userId);
   }
 
   /**
-   * Obtener progreso de capítulos (compatibilidad con mockDatabase)
+   * Obtener progreso de capítulos 
    */
   async getChapterProgress(userId, courseId) {
     const course = await this.courses.getCourseById(courseId, userId);
@@ -115,28 +122,28 @@ class Database {
   }
 
   /**
-   * Crear usuario (compatibilidad con mockDatabase)
+   * Crear usuario 
    */
   async addUser(userData) {
     return await this.users.createUser(userData);
   }
 
   /**
-   * Actualizar usuario (compatibilidad con mockDatabase)
+   * Actualizar usuario 
    */
   async updateUser(userId, updates) {
     return await this.users.updateUser(userId, updates);
   }
 
   /**
-   * Crear inscripción a curso (compatibilidad con mockDatabase)
+   * Crear inscripción a curso 
    */
   async addCourseEnrollment(userId, courseId) {
     return await this.courses.enrollUserToCourse(userId, courseId);
   }
 
   /**
-   * Actualizar progreso de capítulo (compatibilidad con mockDatabase)
+   * Actualizar progreso de capítulo 
    */
   async updateChapterProgress(userId, chapterId, isCompleted) {
     // Necesitamos encontrar el courseId para este capítulo
@@ -160,7 +167,7 @@ class Database {
   }
 
   /**
-   * Marcar notificación como leída (compatibilidad con mockDatabase)
+   * Marcar notificación como leída 
    */
   async markNotificationAsRead(notificationId, userId = null) {
     if (!userId) {

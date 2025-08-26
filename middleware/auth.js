@@ -21,7 +21,6 @@ const generateToken = (user) => {
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
   if (!token) {
     return res.status(401).json({
       success: false,
@@ -29,7 +28,7 @@ const authenticateToken = (req, res, next) => {
     });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+  jwt.verify(token, JWT_SECRET, async(err, decoded) => {
     if (err) {
       if (err.name === 'TokenExpiredError') {
         return res.status(401).json({
@@ -44,7 +43,7 @@ const authenticateToken = (req, res, next) => {
     }
 
     // Verificar que el usuario aún existe y está activo
-    const user = db.findUserById(decoded.id);
+    const user = await db.findUserById(decoded.id);
     if (!user || !user.is_active) {
       return res.status(401).json({
         success: false,

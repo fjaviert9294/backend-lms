@@ -1,21 +1,20 @@
 const express = require('express');
 const { body, query, validationResult } = require('express-validator');
 const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
-const mockDb = require('../data/mockDatabase');
 const db = require('../database');
 
 const router = express.Router();
 
 // Obtener todos los cursos (público)
-router.get('/', optionalAuth, (req, res) => {
+router.get('/', optionalAuth, async(req, res) => {
   try {
     const { category, difficulty, search, status = 'published' } = req.query;
     
-    let courses = db.courses.filter(course => course.status === status);
+    let courses = await db.getAllCourses(course => course.status === status);
 
     // Filtrar por categoría
     if (category) {
-      const categoryObj = db.courseCategories.find(cat => 
+      const categoryObj = await db.courseCategories.find(cat => 
         cat.name.toLowerCase() === category.toLowerCase()
       );
       if (categoryObj) {
@@ -41,9 +40,9 @@ router.get('/', optionalAuth, (req, res) => {
     }
 
     // Enriquecer con información de instructor y categoría
-    const enrichedCourses = courses.map(course => {
+    const enrichedCourses = await Promise.all (courses.map(course => {
       const instructor = db.findUserById(course.instructor_id);
-      const category = db.courseCategories.find(cat => cat.id === course.category_id);
+      const category = db.getCourseCategories(cat => cat.id === course.category_id);
       
       return {
         ...course,
@@ -62,7 +61,7 @@ router.get('/', optionalAuth, (req, res) => {
             e.user_id === req.user.id && e.course_id === course.id
           ) : false
       };
-    });
+    }));
 
     res.json({
       success: true,
@@ -82,10 +81,10 @@ router.get('/', optionalAuth, (req, res) => {
 });
 
 // Obtener curso específico
-router.get('/:id', optionalAuth, (req, res) => {
+router.get('/:id', optionalAuth, async(req, res) => {
   try {
     const { id } = req.params;
-    const course = db.getCourseById(id);
+    const course = await db.getCourseById(id);
     
     if (!course) {
       return res.status(404).json({
@@ -95,24 +94,24 @@ router.get('/:id', optionalAuth, (req, res) => {
     }
 
     // Información del instructor
-    const instructor = db.findUserById(course.instructor_id);
-    const category = db.courseCategories.find(cat => cat.id === course.category_id);
+    const instructor = await db.findUserById(course.instructor_id);
+    const category = await db.courseCategories.find(cat => cat.id === course.category_id);
     
     // Capítulos del curso
-    const chapters = db.getCourseChapters(id);
+    const chapters = await db.getCourseChapters(id);
     
     // Información de inscripción si el usuario está autenticado
     let enrollmentInfo = null;
     let chapterProgress = [];
     
     if (req.user) {
-      const enrollment = db.courseEnrollments.find(e => 
+      const enrollment = await db.courseEnrollments.find(e => 
         e.user_id === req.user.id && e.course_id === id
       );
       
       if (enrollment) {
         enrollmentInfo = enrollment;
-        chapterProgress = db.getChapterProgress(req.user.id, id);
+        chapterProgress = await db.getChapterProgress(req.user.id, id);
       }
     }
 
@@ -160,10 +159,10 @@ router.get('/:id', optionalAuth, (req, res) => {
 });
 
 // Inscribirse a un curso
-router.post('/:id/enroll', authenticateToken, (req, res) => {
+router.post('/:id/enroll', authenticateToken, async(req, res) => {
   try {
     const { id } = req.params;
-    const course = db.getCourseById(id);
+    const course = await db.getCourseById(id);
     
     if (!course) {
       return res.status(404).json({
@@ -180,7 +179,7 @@ router.post('/:id/enroll', authenticateToken, (req, res) => {
     }
 
     // Verificar si ya está inscrito
-    const existingEnrollment = db.courseEnrollments.find(e => 
+    const existingEnrollment = await db.courseEnrollments.find(e => 
       e.user_id === req.user.id && e.course_id === id
     );
 
@@ -192,7 +191,7 @@ router.post('/:id/enroll', authenticateToken, (req, res) => {
     }
 
     // Crear inscripción
-    const enrollment = db.addCourseEnrollment(req.user.id, id);
+    const enrollment = await db.addCourseEnrollment(req.user.id, id);
 
     res.status(201).json({
       success: true,
@@ -212,12 +211,12 @@ router.post('/:id/enroll', authenticateToken, (req, res) => {
 });
 
 // Marcar capítulo como completado
-router.put('/:courseId/chapters/:chapterId/complete', authenticateToken, (req, res) => {
+router.put('/:courseId/chapters/:chapterId/complete', authenticateToken, async(req, res) => {
   try {
     const { courseId, chapterId } = req.params;
     
     // Verificar que el usuario está inscrito en el curso
-    const enrollment = db.courseEnrollments.find(e => 
+    const enrollment = await db.courseEnrollments.find(e => 
       e.user_id === req.user.id && e.course_id === courseId
     );
 
@@ -229,7 +228,7 @@ router.put('/:courseId/chapters/:chapterId/complete', authenticateToken, (req, r
     }
 
     // Verificar que el capítulo existe
-    const chapter = db.courseChapters.find(ch => 
+    const chapter = await db.courseChapters.find(ch => 
       ch.id === chapterId && ch.course_id === courseId
     );
 
@@ -241,19 +240,19 @@ router.put('/:courseId/chapters/:chapterId/complete', authenticateToken, (req, r
     }
 
     // Actualizar progreso del capítulo
-    const updatedProgress = db.updateChapterProgress(req.user.id, chapterId, true);
+    const updatedProgress = await db.updateChapterProgress(req.user.id, chapterId, true);
 
     // Calcular nuevo progreso del curso
-    const allChapters = db.getCourseChapters(courseId);
-    const completedChapters = db.getChapterProgress(req.user.id, courseId)
+    const allChapters = await db.getCourseChapters(courseId);
+    const completedChapters = await db.getChapterProgress(req.user.id, courseId)
       .filter(cp => cp.is_completed).length;
     
     const progressPercentage = (completedChapters / allChapters.length) * 100;
 
     // Actualizar progreso de la inscripción
-    const enrollmentIndex = db.courseEnrollments.findIndex(e => e.id === enrollment.id);
+    const enrollmentIndex = await db.courseEnrollments.findIndex(e => e.id === enrollment.id);
     if (enrollmentIndex !== -1) {
-      db.courseEnrollments[enrollmentIndex] = {
+        db.courseEnrollments[enrollmentIndex] = {
         ...db.courseEnrollments[enrollmentIndex],
         progress_percentage: progressPercentage,
         last_accessed_at: new Date(),
@@ -291,7 +290,7 @@ router.post('/:id/rate', authenticateToken, [
     .trim()
     .isLength({ max: 500 })
     .withMessage('La reseña no puede exceder 500 caracteres')
-], (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -306,7 +305,7 @@ router.post('/:id/rate', authenticateToken, [
     const { rating, review } = req.body;
 
     // Verificar que el curso existe
-    const course = db.getCourseById(id);
+    const course = await db.getCourseById(id);
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -315,7 +314,7 @@ router.post('/:id/rate', authenticateToken, [
     }
 
     // Verificar que el usuario completó el curso
-    const enrollment = db.courseEnrollments.find(e => 
+    const enrollment = await db.courseEnrollments.find(e => 
       e.user_id === req.user.id && e.course_id === id && e.status === 'completed'
     );
 
@@ -327,7 +326,7 @@ router.post('/:id/rate', authenticateToken, [
     }
 
     // Crear o actualizar calificación
-    const existingRatingIndex = db.courseRatings.findIndex(cr => 
+    const existingRatingIndex = await db.courseRatings.findIndex(cr => 
       cr.user_id === req.user.id && cr.course_id === id
     );
 
@@ -340,12 +339,12 @@ router.post('/:id/rate', authenticateToken, [
     };
 
     if (existingRatingIndex !== -1) {
-      db.courseRatings[existingRatingIndex] = {
+        db.courseRatings[existingRatingIndex] = {
         ...db.courseRatings[existingRatingIndex],
         ...ratingData
       };
     } else {
-      db.courseRatings.push({
+      await db.courseRatings.push({
         id: `cr-${Date.now()}`,
         created_at: new Date(),
         ...ratingData
@@ -353,10 +352,10 @@ router.post('/:id/rate', authenticateToken, [
     }
 
     // Actualizar promedio del curso
-    const courseRatings = db.courseRatings.filter(cr => cr.course_id === id);
+    const courseRatings = await db.courseRatings.filter(cr => cr.course_id === id);
     const averageRating = courseRatings.reduce((sum, cr) => sum + cr.rating, 0) / courseRatings.length;
     
-    const courseIndex = db.courses.findIndex(c => c.id === id);
+    const courseIndex = await db.courses.findIndex(c => c.id === id);
     if (courseIndex !== -1) {
       db.courses[courseIndex].rating_average = Math.round(averageRating * 100) / 100;
     }
@@ -380,12 +379,12 @@ router.post('/:id/rate', authenticateToken, [
 });
 
 // Obtener categorías de cursos
-router.get('/categories/list', (req, res) => {
+router.get('/categories/list', async(req, res) => {
   try {
     res.json({
       success: true,
       data: {
-        categories: db.courseCategories
+        categories: await db.courseCategories
       }
     });
   } catch (error) {

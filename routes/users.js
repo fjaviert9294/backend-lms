@@ -220,7 +220,6 @@ router.get('/:id/courses', authenticateToken, requireSelfOrAdmin, async (req, re
     const { status } = req.query; // active, completed, all
 
     let enrollments = await db.getUserCourses(id);
-
     // Filtrar por estado si se especifica
     if (status && status !== 'all') {
       enrollments = enrollments.filter(enrollment => enrollment.status === status);
@@ -228,14 +227,14 @@ router.get('/:id/courses', authenticateToken, requireSelfOrAdmin, async (req, re
 
     // Enriquecer con información del curso
     const enrichedEnrollments = await Promise.all (enrollments.map(async enrollment => {
-      const course = await db.getCourseById(enrollment.course_id);
-      const category = course ? await db.getCourseCategories(cat => cat.id === course.category_id) : null;
-      const instructor = course ? await db.findUserById(course.instructor_id) : null;
+      const course = db.getCourseById(enrollment.course_id);
+      const category = course ? db.getCourseCategories(cat => cat.id === course.category_id) : null;
+      const instructor = course ? db.findUserById(course.instructor_id) : null;
 
       // Obtener progreso de capítulos
       const chapterProgress = await db.getChapterProgress(id, enrollment.course_id);
-      const courseChapters = course ? await db.getCourseChapters(course.id) : [];
-
+      const courseChapters = course ? db.getCourseChapters(course.id) : [];
+      
       return {
         ...enrollment,
         course: course ? {
@@ -253,6 +252,7 @@ router.get('/:id/courses', authenticateToken, requireSelfOrAdmin, async (req, re
         } : null
       };
     }));
+    
 
     res.json({
       success: true,
@@ -326,12 +326,10 @@ router.get('/:id/stats', authenticateToken, requireSelfOrAdmin, async (req, res)
           total_badges: badges.length,
           ...stats
         },
-        badges: badges.map(badge => ({
+        badges: await Promise.all(badges.map(badge => ({
           ...badge,
-          earned_date: db.getUserBadges(ub => 
-            ub.user_id === id && ub.badge_id === badge.id
-          )?.earned_at
-        })),
+          earned_date: db.getUserBadges(badge.user_id)?.earned_at
+        }))),
         progress_by_category: progressByCategory
       }
     });

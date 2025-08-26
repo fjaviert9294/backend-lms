@@ -1,44 +1,43 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const mockDb = require('../data/mockDatabase');
 const db = require('../database');
 
 const router = express.Router();
 
 // Dashboard de administración - Estadísticas generales
-router.get('/dashboard', authenticateToken, requireAdmin, (req, res) => {
+router.get('/dashboard', authenticateToken, requireAdmin, async(req, res) => {
   try {
     // Estadísticas de usuarios
-    const totalUsers = db.users.filter(u => u.is_active).length;
+    const totalUsers = await db.users.filter(u => u.is_active).length;
     const usersByRole = {
-      student: db.users.filter(u => u.role === 'student' && u.is_active).length,
-      instructor: db.users.filter(u => u.role === 'instructor' && u.is_active).length,
-      admin: db.users.filter(u => u.role === 'admin' && u.is_active).length
+      student: await db.users.filter(u => u.role === 'student' && u.is_active).length,
+      instructor: await db.users.filter(u => u.role === 'instructor' && u.is_active).length,
+      admin: await db.users.filter(u => u.role === 'admin' && u.is_active).length
     };
 
     // Estadísticas de cursos
-    const totalCourses = db.courses.length;
+    const totalCourses = await db.courses.length;
     const coursesByStatus = {
-      published: db.courses.filter(c => c.status === 'published').length,
-      draft: db.courses.filter(c => c.status === 'draft').length,
-      archived: db.courses.filter(c => c.status === 'archived').length
+      published: await db.courses.filter(c => c.status === 'published').length,
+      draft: await db.courses.filter(c => c.status === 'draft').length,
+      archived: await db.courses.filter(c => c.status === 'archived').length
     };
 
     // Estadísticas de inscripciones
-    const totalEnrollments = db.courseEnrollments.length;
+    const totalEnrollments = await db.courseEnrollments.length;
     const enrollmentsByStatus = {
-      active: db.courseEnrollments.filter(e => e.status === 'active').length,
-      completed: db.courseEnrollments.filter(e => e.status === 'completed').length,
-      dropped: db.courseEnrollments.filter(e => e.status === 'dropped').length
+      active: await db.courseEnrollments.filter(e => e.status === 'active').length,
+      completed: await db.courseEnrollments.filter(e => e.status === 'completed').length,
+      dropped: await db.courseEnrollments.filter(e => e.status === 'dropped').length
     };
 
     // Estadísticas de insignias
-    const totalBadgesAwarded = db.userBadges.length;
-    const totalBadgesAvailable = db.badges.filter(b => b.is_active).length;
+    const totalBadgesAwarded = await db.userBadges.length;
+    const totalBadgesAvailable = await db.badges.filter(b => b.is_active).length;
 
     // Cursos más populares
-    const coursesWithEnrollments = db.courses.map(course => {
+    const coursesWithEnrollments = await Promise.all (db.courses.map(course => {
       const enrollmentCount = db.courseEnrollments.filter(e => e.course_id === course.id).length;
       const completionRate = enrollmentCount > 0 ? 
         (db.courseEnrollments.filter(e => e.course_id === course.id && e.status === 'completed').length / enrollmentCount) * 100 : 0;
@@ -50,10 +49,10 @@ router.get('/dashboard', authenticateToken, requireAdmin, (req, res) => {
         completion_rate: Math.round(completionRate * 100) / 100,
         rating: course.rating_average
       };
-    }).sort((a, b) => b.enrollments - a.enrollments).slice(0, 5);
+    })).sort((a, b) => b.enrollments - a.enrollments).slice(0, 5);
 
     // Actividad reciente
-    const recentEnrollments = db.courseEnrollments
+    const recentEnrollments = await Promise.all (db.courseEnrollments
       .sort((a, b) => new Date(b.enrolled_at) - new Date(a.enrolled_at))
       .slice(0, 10)
       .map(enrollment => {
@@ -66,10 +65,10 @@ router.get('/dashboard', authenticateToken, requireAdmin, (req, res) => {
           enrolled_at: enrollment.enrolled_at,
           status: enrollment.status
         };
-      });
+      }));
 
     // Insignias recientes
-    const recentBadges = db.userBadges
+    const recentBadges = await Promise.all (db.userBadges
       .sort((a, b) => new Date(b.earned_at) - new Date(a.earned_at))
       .slice(0, 10)
       .map(userBadge => {
@@ -81,7 +80,7 @@ router.get('/dashboard', authenticateToken, requireAdmin, (req, res) => {
           badge: badge ? { id: badge.id, name: badge.name, icon: badge.icon } : null,
           earned_at: userBadge.earned_at
         };
-      });
+      }));
 
     res.json({
       success: true,
@@ -114,7 +113,7 @@ router.get('/dashboard', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Gestión de usuarios - Obtener lista completa
-router.get('/users', authenticateToken, requireAdmin, (req, res) => {
+router.get('/users', authenticateToken, requireAdmin, async(req, res) => {
   try {
     const { 
       role, 
@@ -127,7 +126,7 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
       sort_order = 'desc'
     } = req.query;
     
-    let users = db.users;
+    let users = await db.users;
 
     // Filtrar por estado
     if (status !== 'all') {
@@ -179,7 +178,7 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
     const paginatedUsers = users.slice(startIndex, endIndex);
 
     // Enriquecer con estadísticas
-    const enrichedUsers = paginatedUsers.map(user => {
+    const enrichedUsers = await Promise.all (paginatedUsers.map(user => {
       const { password: _, ...userWithoutPassword } = user;
       const stats = db.getUserStats(user.id);
       const enrollments = db.getUserCourses(user.id);
@@ -195,7 +194,7 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
           total_time_spent: stats ? stats.total_time_spent_minutes : 0
         }
       };
-    });
+    }));
 
     res.json({
       success: true,
@@ -220,7 +219,7 @@ router.get('/users', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Desactivar/Activar usuario
-router.put('/users/:id/toggle-status', authenticateToken, requireAdmin, (req, res) => {
+router.put('/users/:id/toggle-status', authenticateToken, requireAdmin, async(req, res) => {
   try {
     const { id } = req.params;
     
@@ -231,7 +230,7 @@ router.put('/users/:id/toggle-status', authenticateToken, requireAdmin, (req, re
       });
     }
 
-    const user = db.findUserById(id);
+    const user = await db.findUserById(id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -240,7 +239,7 @@ router.put('/users/:id/toggle-status', authenticateToken, requireAdmin, (req, re
     }
 
     const newStatus = !user.is_active;
-    const updatedUser = db.updateUser(id, { is_active: newStatus });
+    const updatedUser = await db.updateUser(id, { is_active: newStatus });
 
     res.json({
       success: true,
@@ -269,7 +268,7 @@ router.put('/users/:id/role', authenticateToken, requireAdmin, [
   body('role')
     .isIn(['student', 'instructor', 'admin'])
     .withMessage('Rol debe ser student, instructor o admin')
-], (req, res) => {
+], async(req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -290,7 +289,7 @@ router.put('/users/:id/role', authenticateToken, requireAdmin, [
       });
     }
 
-    const user = db.findUserById(id);
+    const user = await db.findUserById(id);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -298,7 +297,7 @@ router.put('/users/:id/role', authenticateToken, requireAdmin, [
       });
     }
 
-    const updatedUser = db.updateUser(id, { role });
+    const updatedUser = await db.updateUser(id, { role });
 
     res.json({
       success: true,
@@ -323,9 +322,9 @@ router.put('/users/:id/role', authenticateToken, requireAdmin, [
 });
 
 // Gestión de cursos - Estadísticas detalladas
-router.get('/courses/stats', authenticateToken, requireAdmin, (req, res) => {
+router.get('/courses/stats', authenticateToken, requireAdmin, async(req, res) => {
   try {
-    const coursesWithStats = db.courses.map(course => {
+    const coursesWithStats = await Promise.all (db.courses.map(course => {
       const enrollments = db.courseEnrollments.filter(e => e.course_id === course.id);
       const completedEnrollments = enrollments.filter(e => e.status === 'completed');
       const activeEnrollments = enrollments.filter(e => e.status === 'active');
@@ -367,7 +366,7 @@ router.get('/courses/stats', authenticateToken, requireAdmin, (req, res) => {
           avg_completion_time_days: avgCompletionTime
         }
       };
-    });
+    }));
 
     // Ordenar por popularidad (inscripciones totales)
     coursesWithStats.sort((a, b) => b.stats.total_enrollments - a.stats.total_enrollments);
@@ -390,7 +389,7 @@ router.get('/courses/stats', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // Reportes de actividad
-router.get('/reports/activity', authenticateToken, requireAdmin, (req, res) => {
+router.get('/reports/activity', authenticateToken, requireAdmin, async(req, res) => {
   try {
     const { period = '30', start_date, end_date } = req.query;
     
@@ -406,20 +405,20 @@ router.get('/reports/activity', authenticateToken, requireAdmin, (req, res) => {
     }
 
     // Inscripciones en el período
-    const enrollmentsInPeriod = db.courseEnrollments.filter(e => {
+    const enrollmentsInPeriod = await db.courseEnrollments.filter(e => {
       const enrollDate = new Date(e.enrolled_at);
       return enrollDate >= startDate && enrollDate <= endDate;
     });
 
     // Completaciones en el período
-    const completionsInPeriod = db.courseEnrollments.filter(e => {
+    const completionsInPeriod = await db.courseEnrollments.filter(e => {
       if (!e.completed_at) return false;
       const completeDate = new Date(e.completed_at);
       return completeDate >= startDate && completeDate <= endDate;
     });
 
     // Insignias otorgadas en el período
-    const badgesInPeriod = db.userBadges.filter(ub => {
+    const badgesInPeriod = await db.userBadges.filter(ub => {
       const earnedDate = new Date(ub.earned_at);
       return earnedDate >= startDate && earnedDate <= endDate;
     });
@@ -464,14 +463,14 @@ router.get('/reports/activity', authenticateToken, requireAdmin, (req, res) => {
       }
     });
 
-    const topActiveCourses = Object.entries(courseActivity)
+    const topActiveCourses = await Promise.all (Object.entries(courseActivity)
       .map(([courseId, activity]) => {
         const course = db.getCourseById(courseId);
         return {
           course: course ? { id: course.id, title: course.title } : null,
           ...activity
         };
-      })
+      }))
       .sort((a, b) => b.enrollments - a.enrollments)
       .slice(0, 10);
 

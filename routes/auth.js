@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const { generateToken, authenticateToken } = require('../middleware/auth');
-const mockDb = require('../data/mockDatabase');
 const db = require('../database');
 
 const router = express.Router();
@@ -52,7 +51,7 @@ router.post('/register', registerValidation, async (req, res) => {
     const { email, password, name, role = 'student', department, position } = req.body;
 
     // Verificar si el usuario ya existe
-    const existingUser = db.findUserByEmail(email);
+    const existingUser = await db.findUserByEmail(email);
     if (existingUser) {
       return res.status(409).json({
         success: false,
