@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const { authenticateToken, requireSelfOrAdmin, requireAdmin } = require('../middleware/auth');
-const mockDb = require('../data/mockDatabase');
 const db = require('../database');
 
 const router = express.Router();

@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const mockDb = require('../data/mockDatabase');
 const db = require('../database');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'lms-corporativo-secret-key-2025';
