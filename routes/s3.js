@@ -14,9 +14,12 @@ const s3 = new S3Client({
 
 router.post('/presigned-url', async (req, res) => {
   try {
+    console.log('req.body', req.body)
     const { fileName, fileType } = req.body;
     const bucket = process.env.AWS_S3_BUCKET;
-
+    if (!fileName || !fileType) {
+      return res.status(400).json({ success: false, message: 'fileName y fileType son requeridos' });
+    }
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: fileName,
